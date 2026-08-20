@@ -1,0 +1,3 @@
+[submodule "modules/ParamManager"]
+	path = modules/ParamManager
+	url = https://github.com/AmirAavani/ParamManager
