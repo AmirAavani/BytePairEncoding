@@ -38,6 +38,8 @@ type
     constructor CreateFromStream(AStream: TStream);
     destructor Destroy; override;
 
+    procedure SaveToFile(const Filename: ansistring);
+    procedure LoadFromFile(const Filename: ansistring);
     procedure SaveToStream(AStream: TStream);
     procedure LoadFromStream(AStream: TStream);
 
@@ -48,6 +50,7 @@ type
   end;
 
 implementation
+
 uses
   fpjson, jsonparser, jsonscanner;
 
@@ -111,13 +114,33 @@ begin
   inherited;
 end;
 
+procedure TBPEConfig.SaveToFile(const Filename: ansistring);
+var
+  OutputStream: TStream;
+begin
+  OutputStream := TFileStream.Create(Filename, fmCreate);
+  Self.SaveToStream(OutputStream);
+  OutputStream.Free;
+
+end;
+
+procedure TBPEConfig.LoadFromFile(const Filename: ansistring);
+var
+  InputStream: TStream;
+begin
+  InputStream := TFileStream.Create(Filename, fmOpenRead);
+  Self.LoadFromStream(InputStream);
+  InputStream.Free;
+
+end;
+
 procedure TBPEConfig.SaveToStream(AStream: TStream);
 var
   Root, SpecialObj, MergeObj: TJSONObject;
   MergesArr: TJSONArray;
   Key: string;
   Merge: TBPEPairMerge;
-  i: Integer;
+  i: integer;
   JSONStr: string;
 begin
   Root := TJSONObject.Create;
@@ -159,7 +182,7 @@ var
   Parser: TJSONParser;
   Root, SpecialObj, MergeObj: TJSONObject;
   MergesArr: TJSONArray;
-  i: Integer;
+  i: integer;
   Merge: TBPEPairMerge;
 begin
   FSpecialTokens.Clear;
