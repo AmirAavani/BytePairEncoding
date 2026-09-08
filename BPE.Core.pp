@@ -10,29 +10,40 @@ uses
 
 type
   TTokenPair = uint64;
+  TTokenID = uint32;
+  TTokenFrequency = specialize TDictionary<ansistring, uint64>;
+
 
 function MakePair(Left, Right: integer): TTokenPair; inline;
 procedure SplitPair(Pair: TTokenPair; out Left, Right: integer); inline;
 
 type
-  TBPEPairMerge = record
-    LeftToken: integer;
-    RightToken: integer;
-    NewTokenId: integer;
-  end;
-
-  TBPEPairMergeList = specialize TList<TBPEPairMerge>;
-  TSpecialTokenMap = specialize TDictionary<string, integer>;
-  TWordDictionary = specialize TDictionary<string, integer>;
-
   { TBPEConfig }
   // Holds the learned BPE vocabulary state, special tokens, and serialization logic.
   TBPEConfig = class
+  public
+  type
+    TBPEPairMerge = record
+      LeftToken: TTokenID;
+      RightToken: TTokenID;
+      NewTokenId: TTokenID;
+    end;
+
+    TTokenToID = specialize TDictionary<ansistring, TTokenID>;
+    TIDToToken = specialize TDictionary<TTokenID, ansistring>;
+    TBPEPairMergeList = specialize TList<TBPEPairMerge>;
+    TSpecialTokenMap = specialize TDictionary<ansistring, TTokenID>;
+    TWordDictionary = specialize TDictionary<ansistring, uint32>;
+
+
   private
     FSpecialTokens: TSpecialTokenMap;
     FMerges: TBPEPairMergeList;
     FVocabSize: integer;
     FByteOffset: integer;
+
+    FTokenToID: TTokenToID;
+    FIDToToken: TIDToToken;
   public
     constructor Create;
     constructor CreateFromStream(AStream: TStream);
@@ -47,6 +58,9 @@ type
     property Merges: TBPEPairMergeList read FMerges;
     property VocabSize: integer read FVocabSize write FVocabSize;
     property ByteOffset: integer read FByteOffset write FByteOffset;
+    property TokenToID: TTokenToID read FTokenToID;
+    property IDToToken: TIDToToken read FIDToToken;
+
   end;
 
 implementation
@@ -95,8 +109,12 @@ end;
 
 constructor TBPEConfig.Create;
 begin
+  inherited;
+
   FSpecialTokens := TSpecialTokenMap.Create;
   FMerges := TBPEPairMergeList.Create;
+  FTokenToID := TTokenToID.Create;
+  FIDToToken := TIDToToken.Create;
   FVocabSize := 0;
   FByteOffset := 0;
 end;
@@ -144,37 +162,34 @@ var
   JSONStr: string;
 begin
   Root := TJSONObject.Create;
-  try
-    // 1. Core Configuration
-    Root.Add('vocab_size', FVocabSize);
-    Root.Add('byte_offset', FByteOffset);
+  // 1. Core Configuration
+  Root.Add('vocab_size', FVocabSize);
+  Root.Add('byte_offset', FByteOffset);
 
-    // 2. Special Tokens
-    SpecialObj := TJSONObject.Create;
-    for Key in FSpecialTokens.Keys do
-      SpecialObj.Add(Key, FSpecialTokens[Key]);
-    Root.Add('special_tokens', SpecialObj);
+  // 2. Special Tokens
+  SpecialObj := TJSONObject.Create;
+  for Key in FSpecialTokens.Keys do
+    SpecialObj.Add(Key, FSpecialTokens[Key]);
+  Root.Add('special_tokens', SpecialObj);
 
-    // 3. Merges
-    MergesArr := TJSONArray.Create;
-    for i := 0 to FMerges.Count - 1 do
-    begin
-      Merge := FMerges[i];
-      MergeObj := TJSONObject.Create;
-      MergeObj.Add('left', Merge.LeftToken);
-      MergeObj.Add('right', Merge.RightToken);
-      MergeObj.Add('new_id', Merge.NewTokenId);
-      MergesArr.Add(MergeObj);
-    end;
-    Root.Add('merges', MergesArr);
-
-    // Write to stream as a UTF-8 string
-    JSONStr := Root.AsJSON;
-    if Length(JSONStr) > 0 then
-      AStream.WriteBuffer(JSONStr[1], Length(JSONStr));
-  finally
-    Root.Free;
+  // 3. Merges
+  MergesArr := TJSONArray.Create;
+  for i := 0 to FMerges.Count - 1 do
+  begin
+    Merge := FMerges[i];
+    MergeObj := TJSONObject.Create;
+    MergeObj.Add('left', Merge.LeftToken);
+    MergeObj.Add('right', Merge.RightToken);
+    MergeObj.Add('new_id', Merge.NewTokenId);
+    MergesArr.Add(MergeObj);
   end;
+  Root.Add('merges', MergesArr);
+
+  // Write to stream as a UTF-8 string
+  JSONStr := Root.AsJSON;
+  if Length(JSONStr) > 0 then
+    AStream.WriteBuffer(JSONStr[1], Length(JSONStr));
+  Root.Free;
 end;
 
 procedure TBPEConfig.LoadFromStream(AStream: TStream);
@@ -189,37 +204,31 @@ begin
   FMerges.Clear;
 
   Parser := TJSONParser.Create(AStream, [joUTF8, joIgnoreTrailingComma]);
-  try
-    Root := Parser.Parse as TJSONObject;
-    try
-      // 1. Core Configuration
-      FVocabSize := Root.Integers['vocab_size'];
-      FByteOffset := Root.Integers['byte_offset'];
+  Root := Parser.Parse as TJSONObject;
+  // 1. Core Configuration
+  FVocabSize := Root.Integers['vocab_size'];
+  FByteOffset := Root.Integers['byte_offset'];
 
-      // 2. Special Tokens
-      SpecialObj := Root.Objects['special_tokens'];
-      for i := 0 to SpecialObj.Count - 1 do
-      begin
-        // Add(Key, Value)
-        FSpecialTokens.Add(SpecialObj.Names[i], SpecialObj.Items[i].AsInteger);
-      end;
-
-      // 3. Merges
-      MergesArr := Root.Arrays['merges'];
-      for i := 0 to MergesArr.Count - 1 do
-      begin
-        MergeObj := MergesArr.Objects[i];
-        Merge.LeftToken := MergeObj.Integers['left'];
-        Merge.RightToken := MergeObj.Integers['right'];
-        Merge.NewTokenId := MergeObj.Integers['new_id'];
-        FMerges.Add(Merge);
-      end;
-    finally
-      Root.Free;
-    end;
-  finally
-    Parser.Free;
+  // 2. Special Tokens
+  SpecialObj := Root.Objects['special_tokens'];
+  for i := 0 to SpecialObj.Count - 1 do
+  begin
+    // Add(Key, Value)
+    FSpecialTokens.Add(SpecialObj.Names[i], SpecialObj.Items[i].AsInteger);
   end;
+
+  // 3. Merges
+  MergesArr := Root.Arrays['merges'];
+  for i := 0 to MergesArr.Count - 1 do
+  begin
+    MergeObj := MergesArr.Objects[i];
+    Merge.LeftToken := MergeObj.Integers['left'];
+    Merge.RightToken := MergeObj.Integers['right'];
+    Merge.NewTokenId := MergeObj.Integers['new_id'];
+    FMerges.Add(Merge);
+  end;
+  Root.Free;
+  Parser.Free;
 end;
 
 end.
