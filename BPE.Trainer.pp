@@ -487,7 +487,6 @@ begin
 
   for Pair in FTokenToID do
   begin
-    FMTDebugLn('Key: %s Value: %d', [Pair.Key, Pair.Value]);
     Result.TokenToID.Add(Pair.Key, Pair.Value);
     Result.IDToToken.Add(Pair.Value, Pair.Key);
   end;
