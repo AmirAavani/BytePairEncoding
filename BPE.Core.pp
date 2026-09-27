@@ -13,6 +13,8 @@ type
   TTokenID = uint32;
   TTokenFrequency = specialize TDictionary<ansistring, uint64>;
 
+const
+  SpacePrefix = #226;
 
 function MakePair(Left, Right: integer): TTokenPair; inline;
 procedure SplitPair(Pair: TTokenPair; out Left, Right: integer); inline;

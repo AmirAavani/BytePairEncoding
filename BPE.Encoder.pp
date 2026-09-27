@@ -141,14 +141,11 @@ var
   PCH, Start: pchar;
   WordStr: rawbytestring;
   TempWordTokens: TIntegerList;
-  i, SpaceTokenId, TabTokenId: integer;
+  i: integer;
+  WordLen: SizeInt;
 begin
   Result := 0;
   if Length(Text) = 0 then Exit;
-
-  // Pre-calculate the native token IDs for whitespace characters
-  SpaceTokenId := FByteOffset + Ord(' ');
-  TabTokenId := FByteOffset + Ord(#9);
 
   PCH := PChar(Text);
   Start := PCH;
@@ -156,14 +153,14 @@ begin
   TempWordTokens := TIntegerList.Create;
   while PCH^ <> #0 do
   begin
-    // Whenever we hit a delimiter...
     if (PCH^ = #10) or (PCH^ = #13) or (PCH^ = ' ') or (PCH^ = #9) then
     begin
-      // 1. If there's an accumulated word, encode it
-      if PCH > Start then
+      WordLen := PCH - Start;
+      if WordLen > 0 then
       begin
-        SetLength(WordStr, PCH - Start);
-        Move(Start^, WordStr[1], Length(WordStr));
+        SetLength(WordStr, WordLen + 1);
+        WordStr[1] := BPE.CORE.SpacePrefix;
+        Move(Start^, WordStr[2], WordLen);
 
         EncodeWord(WordStr, TempWordTokens);
 
@@ -173,29 +170,17 @@ begin
         Inc(Result, TempWordTokens.Count);
       end;
 
-      // 2. Explicitly emit the space or tab to the token stream
-      if PCH^ = ' ' then
-      begin
-        OutputList.Add(SpaceTokenId);
-        Inc(Result);
-      end
-      else if PCH^ = #9 then
-      begin
-        OutputList.Add(TabTokenId);
-        Inc(Result);
-      end;
-
-      // 3. Move the start pointer past the delimiter
       Start := PCH + 1;
     end;
     Inc(PCH);
   end;
 
-  // Handle the final trailing word (if text doesn't end with a space)
-  if PCH > Start then
+  WordLen := PCH - Start;
+  if WordLen > 0 then
   begin
-    SetLength(WordStr, PCH - Start);
-    Move(Start^, WordStr[1], Length(WordStr));
+    SetLength(WordStr, WordLen + 1);
+    WordStr[1] := BPE.CORE.SpacePrefix;
+    Move(Start^, WordStr[2], WordLen);
 
     EncodeWord(WordStr, TempWordTokens);
 
@@ -204,6 +189,7 @@ begin
 
     Inc(Result, TempWordTokens.Count);
   end;
+
   TempWordTokens.Free;
 end;
 

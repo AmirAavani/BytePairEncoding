@@ -105,7 +105,12 @@ begin
     end;
 
     if FTokenToBytes.TryGetValue(TokenId, TokenBytes) then
-      Result := Result + TokenBytes;
+    begin
+      if (Length(TokenBytes) > 0) and (TokenBytes[1] = BPE.CORE.SpacePrefix) then
+        Result := Result + ' ' + Copy(TokenBytes, 2, Length(TokenBytes) - 1)
+      else
+        Result := Result + TokenBytes;
+    end;
   end;
 end;
 
