@@ -206,6 +206,7 @@ begin
   FIDToToken.Free;
   FSpecialTokenMap.Free;
   FMerges.Free;
+
   inherited Destroy;
 end;
 
@@ -354,7 +355,8 @@ begin
     end;
   end;
 
-  for Pair in PairFreqs do Heap.Push(Pair.Key, Pair.Value);
+  for Pair in PairFreqs do
+    Heap.Push(Pair.Key, Pair.Value);
 
   while FNextID < TTokenID(AVocabSize) do
   begin
@@ -475,26 +477,21 @@ var
   SpecPair: specialize TPair<ansistring, TTokenID>;
   MergePair: TBPEConfig.TBPEPairMerge;
 begin
-  FMTDebugLn('ExportConfig', []);
   Result := TBPEConfig.Create;
   Result.VocabSize := FNextID;
   Result.ByteOffset := FByteOffset;
-  FMTDebugLn('ExportConfig.2', []);
 
   for SpecPair in FSpecialTokenMap do
     Result.SpecialTokens.Add(SpecPair.Key, SpecPair.Value);
-  FMTDebugLn('ExportConfig.3', []);
 
   for Pair in FTokenToID do
   begin
     Result.TokenToID.Add(Pair.Key, Pair.Value);
     Result.IDToToken.Add(Pair.Value, Pair.Key);
   end;
-  FMTDebugLn('ExportConfig.4', []);
 
   for MergePair in FMerges do
     Result.Merges.Add(MergePair);
-  FMTDebugLn('ExportConfig.5', []);
 
 end;
 
